@@ -1,0 +1,158 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: smartly-creative-delivery
+  namespace: smartly-platform
+  labels:
+    app: creative-delivery
+    team: platform
+    slo-tier: critical
+spec:
+  replicas: 10
+  selector:
+    matchLabels:
+      app: creative-delivery
+  template:
+    metadata:
+      labels:
+        app: creative-delivery
+        version: stable
+    spec:
+      containers:
+        - name: creative-delivery
+          image: smartly/creative-delivery:v1.0.0
+          ports:
+            - containerPort: 8080
+              name: http
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+            limits:
+              cpu: 2000m
+              memory: 2Gi
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+  strategy:
+    canary:
+      canaryService: smartly-creative-delivery-canary
+      stableService: smartly-creative-delivery-stable
+      trafficRouting:
+        istio:
+          virtualService:
+            name: smartly-creative-delivery-vs
+            routes:
+              - primary
+      steps:
+        - setWeight: 5
+        - pause:
+            duration: 2m
+        - analysis:
+            templates:
+              - templateName: error-rate-check
+            args:
+              - name: service-name
+                value: creative-delivery-canary
+              - name: threshold
+                value: "0.01"
+        - setWeight: 20
+        - pause:
+            duration: 5m
+        - analysis:
+            templates:
+              - templateName: error-rate-check
+              - templateName: latency-p99-check
+            args:
+              - name: service-name
+                value: creative-delivery-canary
+        - setWeight: 50
+        - pause:
+            duration: 10m
+        - analysis:
+            templates:
+              - templateName: error-rate-check
+              - templateName: latency-p99-check
+              - templateName: throughput-check
+        - setWeight: 100
+      abortScaleDownDelaySeconds: 30
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: error-rate-check
+  namespace: smartly-platform
+spec:
+  args:
+    - name: service-name
+    - name: threshold
+      value: "0.005"
+  metrics:
+    - name: error-rate
+      interval: 1m
+      failureLimit: 2
+      successCondition: "result[0] < float('{{args.threshold}}')"
+      provider:
+        prometheus:
+          address: http://prometheus-kube-prometheus-prometheus.monitoring:9090
+          query: |
+            sum(rate(http_requests_total{
+              service="{{args.service-name}}",
+              status=~"5.."
+            }[2m])) /
+            sum(rate(http_requests_total{
+              service="{{args.service-name}}"
+            }[2m]))
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: latency-p99-check
+  namespace: smartly-platform
+spec:
+  args:
+    - name: service-name
+  metrics:
+    - name: latency-p99
+      interval: 1m
+      failureLimit: 2
+      successCondition: "result[0] < 0.1"
+      provider:
+        prometheus:
+          address: http://prometheus-kube-prometheus-prometheus.monitoring:9090
+          query: |
+            histogram_quantile(0.99,
+              sum(rate(http_request_duration_seconds_bucket{
+                service="{{args.service-name}}"
+              }[2m])) by (le)
+            )
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: throughput-check
+  namespace: smartly-platform
+spec:
+  args:
+    - name: service-name
+  metrics:
+    - name: throughput
+      interval: 1m
+      failureLimit: 1
+      successCondition: "result[0] > 1000"
+      provider:
+        prometheus:
+          address: http://prometheus-kube-prometheus-prometheus.monitoring:9090
+          query: |
+            sum(rate(http_requests_total{
+              service="{{args.service-name}}"
+            }[2m]))

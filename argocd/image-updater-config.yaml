@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-image-updater-config
+  namespace: argocd
+data:
+  registries.conf: |
+    registries:
+      - name: AWS ECR
+        api_url: https://123456789.dkr.ecr.eu-west-1.amazonaws.com
+        prefix: 123456789.dkr.ecr.eu-west-1.amazonaws.com
+        credentials: ext:/scripts/ecr-credentials.sh
+        credsexpire: 12h
+        default: true
+      - name: GCP Artifact Registry
+        api_url: https://europe-west1-docker.pkg.dev
+        prefix: europe-west1-docker.pkg.dev
+        credentials: ext:/scripts/gar-credentials.sh
+        credsexpire: 1h
+---
+# Application annotation example for image auto-update
+# argocd-image-updater.argoproj.io/image-list: creative-delivery=123456789.dkr.ecr.eu-west-1.amazonaws.com/smartly/creative-delivery
+# argocd-image-updater.argoproj.io/creative-delivery.update-strategy: semver
+# argocd-image-updater.argoproj.io/creative-delivery.allow-tags: regexp:^v[0-9]+\.[0-9]+\.[0-9]+$
+# argocd-image-updater.argoproj.io/write-back-method: git
+# argocd-image-updater.argoproj.io/git-branch: main
