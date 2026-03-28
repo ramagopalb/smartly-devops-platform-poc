@@ -1,0 +1,14 @@
+apiVersion: v2
+name: ad-platform
+description: Smartly Ad-Tech Platform - Golden Path Helm Chart
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - smartly
+  - ad-tech
+  - platform
+  - kubernetes
+maintainers:
+  - name: platform-engineering
+    email: platform@smartly.io

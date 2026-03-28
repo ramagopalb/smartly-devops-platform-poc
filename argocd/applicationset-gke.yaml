@@ -1,0 +1,61 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: smartly-ad-platform-gke
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - cluster: gke-prod-europe-west1
+            url: https://gke-prod-europe-west1.example.com
+            env: prod
+            region: europe-west1
+            project: smartly-production
+            replicaCount: "3"
+          - cluster: gke-staging-europe-west1
+            url: https://gke-staging-europe-west1.example.com
+            env: staging
+            region: europe-west1
+            project: smartly-staging
+            replicaCount: "1"
+  template:
+    metadata:
+      name: "smartly-ad-platform-gke-{{env}}"
+      labels:
+        environment: "{{env}}"
+        cloud: gcp
+        platform: smartly
+    spec:
+      project: smartly-production
+      source:
+        repoURL: https://github.com/ramagopalb/smartly-devops-platform-poc
+        targetRevision: HEAD
+        path: helm/ad-platform
+        helm:
+          releaseName: "smartly-ad-platform-gke-{{env}}"
+          valueFiles:
+            - "values-{{env}}.yaml"
+          parameters:
+            - name: replicaCount
+              value: "{{replicaCount}}"
+            - name: global.cloud
+              value: gcp
+            - name: global.region
+              value: "{{region}}"
+      destination:
+        server: "{{url}}"
+        namespace: smartly-platform
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
+        retry:
+          limit: 3
+          backoff:
+            duration: 5s
+            factor: 2
+            maxDuration: 2m

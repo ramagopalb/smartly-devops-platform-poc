@@ -1,0 +1,74 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: smartly-ad-platform-eks
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - cluster: eks-prod-eu-west-1
+            url: https://eks-prod-eu-west-1.example.com
+            env: prod
+            region: eu-west-1
+            replicaCount: "5"
+            kafkaPartitions: "32"
+          - cluster: eks-staging-eu-west-1
+            url: https://eks-staging-eu-west-1.example.com
+            env: staging
+            region: eu-west-1
+            replicaCount: "2"
+            kafkaPartitions: "8"
+          - cluster: eks-dev-eu-west-1
+            url: https://eks-dev-eu-west-1.example.com
+            env: dev
+            region: eu-west-1
+            replicaCount: "1"
+            kafkaPartitions: "4"
+  template:
+    metadata:
+      name: "smartly-ad-platform-{{env}}"
+      labels:
+        environment: "{{env}}"
+        cloud: aws
+        platform: smartly
+    spec:
+      project: smartly-production
+      source:
+        repoURL: https://github.com/ramagopalb/smartly-devops-platform-poc
+        targetRevision: HEAD
+        path: helm/ad-platform
+        helm:
+          releaseName: "smartly-ad-platform-{{env}}"
+          valueFiles:
+            - "values-{{env}}.yaml"
+          parameters:
+            - name: replicaCount
+              value: "{{replicaCount}}"
+            - name: kafka.partitions
+              value: "{{kafkaPartitions}}"
+            - name: global.region
+              value: "{{region}}"
+      destination:
+        server: "{{url}}"
+        namespace: smartly-platform
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+          allowEmpty: false
+        syncOptions:
+          - CreateNamespace=true
+          - PrunePropagationPolicy=foreground
+          - ApplyOutOfSyncOnly=true
+        retry:
+          limit: 5
+          backoff:
+            duration: 5s
+            factor: 2
+            maxDuration: 3m
+      ignoreDifferences:
+        - group: apps
+          kind: Deployment
+          jsonPointers:
+            - /spec/replicas
