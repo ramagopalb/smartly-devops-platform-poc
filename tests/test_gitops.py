@@ -3,9 +3,6 @@ Tests for GitOpsPipeline — Smartly DevOps Platform POC.
 Covers ApplicationSet registration, sync lifecycle, rollout strategies,
 progressive delivery, image update automation, and pipeline summary.
 """
-import sys
-import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "platform"))
 import pytest
 from gitops_pipeline import (
     GitOpsPipeline,

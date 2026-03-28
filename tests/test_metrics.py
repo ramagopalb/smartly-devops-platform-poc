@@ -3,9 +3,6 @@ Tests for MetricsCollector — Smartly DevOps Platform POC.
 Covers metric recording, aggregation, ad-tech helpers,
 SLO evaluation, alert rules, and Prometheus config generation.
 """
-import sys
-import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "platform"))
 import time
 import pytest
 from metrics_collector import (
